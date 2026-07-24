@@ -42,6 +42,27 @@ sudo apt-get install -y build-essential cmake libopencv-dev libncurses-dev
 
 Binaries are written to `build/`. `cmake --install build --prefix <dir>` installs them.
 
+### Building on macOS
+
+Install the dependencies with Homebrew, then build as above:
+
+```shell
+brew install cmake opencv ncurses
+cmake -S . -B build && cmake --build build
+```
+
+CMake automatically adds the Homebrew prefixes (`/opt/homebrew` on Apple Silicon,
+`/usr/local` on Intel) to its search path, so OpenCV and ncurses are found without extra
+flags. Homebrew's OpenCV bundles ffmpeg, so the video tool's lossless FFV1 codec is
+available. If ncurses is not found, pass it explicitly:
+
+```shell
+cmake -S . -B build -DCMAKE_PREFIX_PATH="$(brew --prefix ncurses);$(brew --prefix opencv)"
+```
+
+The standalone `audio`, `imgBPCSEmbed`, and `imgBPCSExtract` tools need only a C++17
+compiler and build on macOS with no extra dependencies.
+
 ## Usage
 
 ### Audio LSB (`audio`)

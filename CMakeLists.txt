@@ -29,6 +29,22 @@ set(STANDALONE_TOOLS audio imgBPCSEmbed imgBPCSExtract)
 #   SteganoImgLsb : image LSB TUI  (OpenCV + Curses + Threads)
 #   SteganoVid    : video LSB      (OpenCV + Threads)
 # ---------------------------------------------------------------------------
+# On macOS, help CMake find Homebrew-provided OpenCV/ncurses (Apple Silicon uses
+# /opt/homebrew, Intel uses /usr/local). Harmless on other platforms.
+if(APPLE)
+    foreach(brew_prefix /opt/homebrew /usr/local)
+        if(EXISTS "${brew_prefix}")
+            list(APPEND CMAKE_PREFIX_PATH "${brew_prefix}")
+        endif()
+    endforeach()
+    # Homebrew keeps ncurses key-only; expose it if present.
+    if(EXISTS "/opt/homebrew/opt/ncurses")
+        list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/ncurses")
+    elseif(EXISTS "/usr/local/opt/ncurses")
+        list(APPEND CMAKE_PREFIX_PATH "/usr/local/opt/ncurses")
+    endif()
+endif()
+
 find_package(OpenCV QUIET)
 find_package(Curses QUIET)
 find_package(Threads REQUIRED)
