@@ -93,6 +93,12 @@ std::vector<uint8_t> vigenereDecrypt(const std::vector<uint8_t>& data, const std
 }
 
 int main(int argc, char* argv[]) {
+    if (argc == 2 && (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help")) {
+        std::cout << "Usage: " << argv[0] << " <stego.bmp> <output_directory>\n"
+                  << "Extract a BPCS-hidden file from a 24-bit BMP into <output_directory>.\n"
+                  << "Prompts for the password used at embed time (blank = none).\n";
+        return 0;
+    }
     if (argc != 3) {
         std::cerr << "Usage: " << argv[0] << " <stego.bmp> <output_directory>\n";
         return 1;

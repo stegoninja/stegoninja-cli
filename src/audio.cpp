@@ -221,6 +221,16 @@ int main(int argc, char* argv[]) {
         }
         
         std::string mode(argv[1]);
+        if (mode == "-h" || mode == "--help") {
+            std::cout << "Usage:\n"
+                      << "  " << argv[0] << " embed <cover.wav> <secret> <output> [password] [-e] [-r]\n"
+                      << "  " << argv[0] << " extract <stego.wav> [password] [-e] [-r]\n"
+                      << "\nOptions:\n"
+                      << "  -e   Vigenere-encrypt the payload (obfuscation, NOT strong encryption).\n"
+                      << "  -r   Randomize sample positions using <password> as the seed.\n"
+                      << "  Extract must use the SAME password and -e/-r flags as embed.\n";
+            return 0;
+        }
         if (mode == "embed") {
             if (argc < 5) {
                 std::cerr << "Usage: " << argv[0] << " embed <cover.wav> <secret> <output> [password] [-e] [-r]\n";

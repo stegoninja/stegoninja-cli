@@ -142,6 +142,12 @@ std::vector<uint8_t> vigenereEncrypt(const std::vector<uint8_t>& data, const std
 }
 
 int main(int argc, char* argv[]) {
+    if (argc == 2 && (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help")) {
+        std::cout << "Usage: " << argv[0] << " <cover.bmp> <secret_file> <output.bmp>\n"
+                  << "Embed <secret_file> into a 24-bit BMP cover using BPCS.\n"
+                  << "Prompts for a password on stdin (blank = no encryption/randomization).\n";
+        return 0;
+    }
     if (argc != 4) {
         std::cerr << "Usage: " << argv[0] << " <cover.bmp> <secret_file> <output.bmp>\n";
         return 1;
