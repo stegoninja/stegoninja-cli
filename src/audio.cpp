@@ -8,6 +8,8 @@
 #include <cmath>
 #include <climits>
 
+#include "vigenere.h"  // shared Vigenere byte-cipher (single implementation)
+
 struct WavHeader {
     uint32_t riff;
     uint32_t fileSize;
@@ -39,13 +41,8 @@ void write_file(const std::string& filename, const std::vector<uint8_t>& data) {
     file.write(reinterpret_cast<const char*>(data.data()), data.size());
 }
 
-void vigenere_cipher(std::vector<uint8_t>& data, const std::string& key, bool encrypt) {
-    int key_len = key.length();
-    for (size_t i = 0; i < data.size(); ++i) {
-        uint8_t k = key[i % key_len];
-        data[i] = encrypt ? (data[i] + k) % 256 : (data[i] - k + 256) % 256;
-    }
-}
+// Vigenere byte-cipher now lives in the shared Vigenere:: namespace
+// (src/vigenere.cpp); see Vigenere::vigenereEncrypt / vigenereDecrypt.
 
 unsigned int generate_seed(const std::string& password) {
     unsigned int seed = 0;
@@ -96,7 +93,7 @@ void embed_data(const std::string& cover_file, const std::string& secret_file, c
     header.insert(header.end(), reinterpret_cast<uint8_t*>(&secret_size), reinterpret_cast<uint8_t*>(&secret_size) + 8);
     header.insert(header.end(), secret.begin(), secret.end());
     
-    if (encrypt) vigenere_cipher(header, password, true);
+    if (encrypt) header = Vigenere::vigenereEncrypt(header, password);
     
     std::vector<uint8_t> full_data;
     uint64_t header_size = header.size();
@@ -184,7 +181,7 @@ void extract_data(const std::string& stego_file, const std::string& password, bo
         header[i] = byte;
     }
     
-    if (encrypt) vigenere_cipher(header, password, false);
+    if (encrypt) header = Vigenere::vigenereDecrypt(header, password);
     
     uint32_t filename_len = *reinterpret_cast<uint32_t*>(header.data());
     std::string filename(reinterpret_cast<char*>(header.data() + 4), filename_len);

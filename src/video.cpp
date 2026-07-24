@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "vigenere.h"  // shared Vigenere byte-cipher (single implementation)
+
 using namespace cv;
 using namespace std;
 
@@ -22,34 +24,8 @@ vector<bool> messageToBits(const string &message) {
   return bits;
 }
 
-// Encrypts plaintext using Vigenere cipher with a key
-std::string vigenereEncrypt(const std::string &plaintext,
-                            const std::string &key) {
-  std::string ciphertext = "";
-  int keyLen = key.length();
-  for (size_t i = 0; i < plaintext.size(); ++i) {
-    char plainChar = plaintext[i];
-    char keyChar = key[i % keyLen];
-    // Simple byte shift, not just alphabet
-    unsigned char encryptedChar = (plainChar + keyChar) % 256;
-    ciphertext += encryptedChar;
-  }
-  return ciphertext;
-}
-
-// Decrypts ciphertext using Vigenere cipher with a key
-std::string vigenereDecrypt(const std::string &ciphertext,
-                            const std::string &key) {
-  std::string plaintext = "";
-  int keyLen = key.length();
-  for (size_t i = 0; i < ciphertext.size(); ++i) {
-    char cipherChar = ciphertext[i];
-    char keyChar = key[i % keyLen];
-    unsigned char decryptedChar = (cipherChar - keyChar + 256) % 256;
-    plaintext += decryptedChar;
-  }
-  return plaintext;
-}
+// Vigenere byte-cipher now lives in the shared Vigenere:: namespace
+// (src/vigenere.cpp); call Vigenere::vigenere_encrypt / vigenere_decrypt.
 
 void embedMetadata(cv::Mat &frame, uint8_t metadata) {
   if (frame.empty()) {
@@ -150,7 +126,7 @@ void embedMessage() {
   getline(cin, message);
 
   if (encryptFlag) {
-    message = vigenereEncrypt(message, key);
+    message = Vigenere::vigenere_encrypt(message, key);
   }
   message += '\0'; // Null terminator to mark end
   vector<bool> messageBits = messageToBits(message);
@@ -394,7 +370,7 @@ void extractMessage() {
 
   string message = bitsToMessage(messageBits);
   if (encryptFlag) {
-    message = vigenereDecrypt(message, key);
+    message = Vigenere::vigenere_decrypt(message, key);
   }
 
   if (encryptFlag) {

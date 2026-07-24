@@ -17,7 +17,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 #   imgBPCSEmbed   : image BPCS embed (raw BMP)
 #   imgBPCSExtract : image BPCS extract (raw BMP)
 # ---------------------------------------------------------------------------
-add_executable(audio          src/audio.cpp)
+add_executable(audio          src/audio.cpp src/vigenere.cpp)
 add_executable(imgBPCSEmbed   src/imgBPCSEmbed.cpp)
 add_executable(imgBPCSExtract src/imgBPCSExtract.cpp)
 
@@ -49,7 +49,7 @@ if(OpenCV_FOUND AND CURSES_FOUND)
         Threads::Threads
     )
 
-    add_executable(SteganoVid src/video.cpp)
+    add_executable(SteganoVid src/video.cpp src/vigenere.cpp)
     target_link_libraries(SteganoVid
         ${OpenCV_LIBS}
         Threads::Threads
