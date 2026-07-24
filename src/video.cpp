@@ -1,6 +1,7 @@
 #include <bitset>
 #include <cmath>
 #include <cstdint>
+#include <fstream>
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <random>
