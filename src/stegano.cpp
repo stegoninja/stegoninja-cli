@@ -1,7 +1,16 @@
 #include "stegano.h"
 #include "vigenere.h"
+#include <cstdlib>
 #include <iostream>
 #include <ncurses.h>
+
+bool Stegano::previewsEnabled() {
+  if (std::getenv("STEGO_NO_PREVIEW") != nullptr)
+    return false;
+  if (std::getenv("DISPLAY") == nullptr)
+    return false;
+  return true;
+}
 
 bool Stegano::embedMessage(const std::string &inputImage,
                            const std::string &outputImage,
@@ -173,19 +182,19 @@ bool Stegano::embedImage(const cv::Mat &carrier, const cv::Mat &secret,
   cv::putText(combined_image, text2, textOrg2 + cv::Point(0, textSize2.height),
               fontFace, fontScale, cv::Scalar(255, 255, 255), thickness);
 
-  // Show combined image
-  cv::namedWindow("Side by Side Images", cv::WINDOW_AUTOSIZE);
-  cv::imshow("Side by Side Images", combined_image);
-  // REQUIRED! Process window events or wait for key input
-  cv::waitKey(1000); // Wait 1000 ms for image to process
-
-  // Display the combined image
-  cv::imshow("Side by Side Images", combined_image);
+  // Show combined image (skipped when running headless)
+  if (Stegano::previewsEnabled()) {
+    cv::namedWindow("Side by Side Images", cv::WINDOW_AUTOSIZE);
+    cv::imshow("Side by Side Images", combined_image);
+    cv::waitKey(1000); // Process window events
+    cv::imshow("Side by Side Images", combined_image);
+  }
   mvprintw(4, 1, "Success to embed!\n");
   mvprintw(6, 1, "Press any key to continue...\n");
   refresh();
   getch();
-  cv::destroyAllWindows();
+  if (Stegano::previewsEnabled())
+    cv::destroyAllWindows();
   return true;
 }
 
@@ -330,19 +339,19 @@ bool Stegano::embedImage(const cv::Mat &carrier, const cv::Mat &secret,
   cv::putText(combined_image, text2, textOrg2 + cv::Point(0, textSize2.height),
               fontFace, fontScale, cv::Scalar(255, 255, 255), thickness);
 
-  // Show combined image
-  cv::namedWindow("Side by Side Images", cv::WINDOW_AUTOSIZE);
-  cv::imshow("Side by Side Images", combined_image);
-  // REQUIRED! Process window events or wait for key input
-  cv::waitKey(1000); // Wait 1000 ms for image to process
-
-  // Display the combined image
-  cv::imshow("Side by Side Images", combined_image);
+  // Show combined image (skipped when running headless)
+  if (Stegano::previewsEnabled()) {
+    cv::namedWindow("Side by Side Images", cv::WINDOW_AUTOSIZE);
+    cv::imshow("Side by Side Images", combined_image);
+    cv::waitKey(1000); // Process window events
+    cv::imshow("Side by Side Images", combined_image);
+  }
   mvprintw(4, 1, "Success to embed!\n");
   mvprintw(6, 1, "Press any key to continue...\n");
   refresh();
   getch();
-  cv::destroyAllWindows();
+  if (Stegano::previewsEnabled())
+    cv::destroyAllWindows();
   return true;
 }
 

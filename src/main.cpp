@@ -45,6 +45,8 @@ void show_image(const std::string &image_path) {
     printw("Error: Could not open image.\n");
     return;
   }
+  if (!Stegano::previewsEnabled())
+    return;
   cv::imshow("Image Viewer", image);
   cv::waitKey(0); // Wait for a key press to close the window
   cv::destroyAllWindows();
@@ -338,17 +340,17 @@ void embedFlow(std::string path, std::string saveAs) {
   cv::putText(combined_image, text2, textOrg2 + cv::Point(0, textSize2.height),
               fontFace, fontScale, cv::Scalar(255, 255, 255), thickness);
 
-  // Show combined image
-  cv::namedWindow("Side by Side Images", cv::WINDOW_AUTOSIZE);
-  cv::imshow("Side by Side Images", combined_image);
-  // REQUIRED! Process window events or wait for key input
-  cv::waitKey(1000); // Wait 1000 ms for image to process
-
-  // Display the combined image
-  cv::imshow("Side by Side Images", combined_image);
+  // Show combined image (skipped when running headless)
+  if (Stegano::previewsEnabled()) {
+    cv::namedWindow("Side by Side Images", cv::WINDOW_AUTOSIZE);
+    cv::imshow("Side by Side Images", combined_image);
+    cv::waitKey(1000); // Process window events
+    cv::imshow("Side by Side Images", combined_image);
+  }
   mvprintw(17, 1, "Press any key to continue...");
   getch();
-  cv::destroyAllWindows();
+  if (Stegano::previewsEnabled())
+    cv::destroyAllWindows();
 }
 
 void extractFlow(std::string path) {
