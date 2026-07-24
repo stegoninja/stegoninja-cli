@@ -1,8 +1,10 @@
 #include <bitset>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <opencv2/opencv.hpp>
 #include <random>
 #include <string>
@@ -15,6 +17,22 @@ using namespace std;
 
 std::string original_path;
 std::string stego_path;
+
+// Options for the two operations. When interactive is true the tools prompt for
+// any value on stdin exactly as before; when false the values here are used
+// verbatim (non-interactive / scriptable mode).
+struct VidOpts {
+  bool interactive = true;
+  int frameMode = 1;   // 1 = sequential, 2 = random
+  int pixelMode = 1;   // 1 = sequential, 2 = random
+  int encryptFlag = 0; // 0/1
+  int seed = 0;        // 0..31
+  bool saveToFile = false;
+  std::string key;
+  std::string inPath;   // cover (embed) / stego (extract)
+  std::string outPath;  // stego .avi (embed) / recovered message file (extract)
+  std::string message;  // secret text (embed)
+};
 
 // ====================== Common Functions ======================
 vector<bool> messageToBits(const string &message) {
@@ -98,33 +116,43 @@ void embedBitsInFrame(Mat &frame, const vector<bool> &bits, int &bitIndex,
   }
 }
 
-void embedMessage() {
+void embedMessage(const VidOpts &o = VidOpts()) {
   string inputVideoPath, outputVideoPath, message, key;
   int frameMode, pixelMode, encryptFlag;
 
-  cout << "=== EMBED MODE ===\n";
-  cout << "Frame Mode:\n1. Sequential\n2. Random\nChoose: ";
-  cin >> frameMode;
-  cout << "Pixel Mode:\n1. Sequential\n2. Random\nChoose: ";
-  cin >> pixelMode;
-  cout << "Use Vigenere encryption? [obfuscation, NOT strong crypto] (1 = Yes / 0 = No): ";
-  cin >> encryptFlag;
+  if (o.interactive) {
+    cout << "=== EMBED MODE ===\n";
+    cout << "Frame Mode:\n1. Sequential\n2. Random\nChoose: ";
+    cin >> frameMode;
+    cout << "Pixel Mode:\n1. Sequential\n2. Random\nChoose: ";
+    cin >> pixelMode;
+    cout << "Use Vigenere encryption? [obfuscation, NOT strong crypto] (1 = Yes / 0 = No): ";
+    cin >> encryptFlag;
 
-  if (encryptFlag) {
-    cout << "Enter key: ";
-    cin >> key;
+    if (encryptFlag) {
+      cout << "Enter key: ";
+      cin >> key;
+    }
+
+    cout << "Input video path: ";
+    cin >> inputVideoPath;
+    cout << "Output video path (should end with .avi): ";
+    cin >> outputVideoPath;
+
+    cout << "Enter message: ";
+    cin.ignore();
+    getline(cin, message);
+  } else {
+    frameMode = o.frameMode;
+    pixelMode = o.pixelMode;
+    encryptFlag = o.encryptFlag;
+    key = o.key;
+    inputVideoPath = o.inPath;
+    outputVideoPath = o.outPath;
+    message = o.message;
   }
-
-  cout << "Input video path: ";
-  cin >> inputVideoPath;
-  cout << "Output video path (should end with .avi): ";
-  cin >> outputVideoPath;
   original_path = inputVideoPath;
   stego_path = outputVideoPath;
-
-  cout << "Enter message: ";
-  cin.ignore();
-  getline(cin, message);
 
   if (encryptFlag) {
     message = Vigenere::vigenere_encrypt(message, key);
@@ -157,8 +185,12 @@ void embedMessage() {
     return;
   }
   int seed;
-  cout << "Enter seed : ";
-  cin >> seed;
+  if (o.interactive) {
+    cout << "Enter seed : ";
+    cin >> seed;
+  } else {
+    seed = o.seed;
+  }
 
   uint8_t metadata =
       (frameMode == 2) << 7 | (pixelMode == 2) << 6 | (encryptFlag) << 5;
@@ -325,11 +357,15 @@ void extractRandomBits(const cv::Mat &frame, std::vector<uint8_t> &bits,
   }
 }
 
-void extractMessage() {
+void extractMessage(const VidOpts &o = VidOpts()) {
   string videoPath;
-  cout << "=== EXTRACT MODE ===\n";
-  cout << "Enter steganographic video path: ";
-  cin >> videoPath;
+  if (o.interactive) {
+    cout << "=== EXTRACT MODE ===\n";
+    cout << "Enter steganographic video path: ";
+    cin >> videoPath;
+  } else {
+    videoPath = o.inPath;
+  }
 
   VideoCapture cap(videoPath);
   if (!cap.isOpened()) {
@@ -361,8 +397,12 @@ void extractMessage() {
        << messageLengthBits / 8 << " bytes)\n";
   string key;
   if (encryptFlag) {
-    cout << "Enter key: ";
-    cin >> key;
+    if (o.interactive) {
+      cout << "Enter key: ";
+      cin >> key;
+    } else {
+      key = o.key;
+    }
   }
 
   vector<bool> messageBits;
@@ -379,14 +419,22 @@ void extractMessage() {
   }
 
   int saveMsg = 0;
-  cout << "Safe Message? 1.No, 2.Yes : ";
-  cin >> saveMsg;
+  if (o.interactive) {
+    cout << "Safe Message? 1.No, 2.Yes : ";
+    cin >> saveMsg;
+  } else {
+    saveMsg = o.saveToFile ? 2 : 1;
+  }
 
   cout << "\nExtracted Message:\n" << message << endl;
   if (saveMsg == 2) {
     string pathFile;
-    cout << "Enter path file to save : ";
-    cin >> pathFile;
+    if (o.interactive) {
+      cout << "Enter path file to save : ";
+      cin >> pathFile;
+    } else {
+      pathFile = o.outPath;
+    }
     std::ofstream outFile(pathFile);
     // Check if the file opened successfully
     if (!outFile) {
@@ -485,20 +533,121 @@ void checkPSNR() {
 }
 
 // ====================== Main Program ======================
-int main() {
-  int mode;
-  cout << "===== VIDEO STEGANOGRAPHY TOOL =====\n";
-  cout << "Choose Mode:\n1. Embed Message\n2. Extract Message\nSelect: ";
-  cin >> mode;
+static void printVideoUsage(const char *prog) {
+  cout << "StegoNinja video LSB tool\n\n"
+       << "Interactive (menu):\n  " << prog << "\n\n"
+       << "Non-interactive:\n"
+       << "  " << prog
+       << " embed --cover <in> (--message <text> | --message-file <f>) --output <out.avi>\n"
+       << "        [--seed N] [--frame-mode seq|rand] [--pixel-mode seq|rand] [--key <k>]\n"
+       << "  " << prog << " extract --stego <in.avi> [--output <file>] [--key <k>]\n\n"
+       << "Notes:\n"
+       << "  --key enables Vigenere obfuscation (NOT strong encryption).\n"
+       << "  --seed must be 0..31 (only 5 bits are stored); embed and extract must match.\n"
+       << "  The message is single-line text; output is a lossless FFV1/AVI.\n";
+}
 
-  if (mode == 1) {
-    embedMessage();
-    checkPSNR();
-  } else if (mode == 2) {
-    extractMessage();
-  } else {
-    cerr << "Invalid mode selected.\n";
+int main(int argc, char *argv[]) {
+  // No arguments: keep the original interactive menu.
+  if (argc == 1) {
+    int mode;
+    cout << "===== VIDEO STEGANOGRAPHY TOOL =====\n";
+    cout << "Choose Mode:\n1. Embed Message\n2. Extract Message\nSelect: ";
+    cin >> mode;
+    if (mode == 1) {
+      embedMessage();
+      checkPSNR();
+    } else if (mode == 2) {
+      extractMessage();
+    } else {
+      cerr << "Invalid mode selected.\n";
+    }
+    return 0;
   }
 
+  string cmd = argv[1];
+  if (cmd == "-h" || cmd == "--help") {
+    printVideoUsage(argv[0]);
+    return 0;
+  }
+  if (cmd != "embed" && cmd != "extract") {
+    cerr << "Unknown command: " << cmd << "\n";
+    printVideoUsage(argv[0]);
+    return 2;
+  }
+
+  VidOpts o;
+  o.interactive = false;
+  string messageFile;
+  for (int i = 2; i < argc; ++i) {
+    string a = argv[i];
+    auto need = [&](const string &name) -> string {
+      if (i + 1 >= argc) {
+        cerr << "Missing value for " << name << "\n";
+        std::exit(2);
+      }
+      return argv[++i];
+    };
+    if (a == "--cover" || a == "--stego" || a == "--in")
+      o.inPath = need(a);
+    else if (a == "--output" || a == "--out") {
+      o.outPath = need(a);
+      o.saveToFile = true;
+    } else if (a == "--message")
+      o.message = need(a);
+    else if (a == "--message-file")
+      messageFile = need(a);
+    else if (a == "--key") {
+      o.key = need(a);
+      o.encryptFlag = 1;
+    } else if (a == "--seed")
+      o.seed = std::stoi(need(a));
+    else if (a == "--frame-mode") {
+      string v = need(a);
+      o.frameMode = (v == "rand" || v == "random" || v == "2") ? 2 : 1;
+    } else if (a == "--pixel-mode") {
+      string v = need(a);
+      o.pixelMode = (v == "rand" || v == "random" || v == "2") ? 2 : 1;
+    } else {
+      cerr << "Unknown option: " << a << "\n";
+      printVideoUsage(argv[0]);
+      return 2;
+    }
+  }
+
+  if (o.seed < 0 || o.seed > 31) {
+    cerr << "--seed must be in the range 0..31\n";
+    return 2;
+  }
+
+  if (cmd == "embed") {
+    if (!messageFile.empty()) {
+      std::ifstream mf(messageFile);
+      if (!mf) {
+        cerr << "Cannot open message file: " << messageFile << "\n";
+        return 1;
+      }
+      std::stringstream ss;
+      ss << mf.rdbuf();
+      o.message = ss.str();
+      if (!o.message.empty() && o.message.back() == '\n')
+        o.message.pop_back();
+    }
+    if (o.inPath.empty() || o.outPath.empty()) {
+      cerr << "embed needs --cover and --output\n";
+      return 2;
+    }
+    if (o.encryptFlag && o.key.empty()) {
+      cerr << "--key must be non-empty when encrypting\n";
+      return 2;
+    }
+    embedMessage(o);
+  } else { // extract
+    if (o.inPath.empty()) {
+      cerr << "extract needs --stego\n";
+      return 2;
+    }
+    extractMessage(o);
+  }
   return 0;
 }

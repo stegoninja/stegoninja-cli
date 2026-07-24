@@ -71,19 +71,29 @@ else
 fi
 
 # ------------------------------------------------------------------ video LSB -
+# Video hides a single-line text MESSAGE (not a binary file); the recovered
+# file is the message plus a trailing NUL+newline, so compare the leading bytes.
+# Only sequential frame ordering is exercised (random frame mode is a known bug).
 log "video LSB (AVI):"
-if [ -x "$VID" ] && "$VID" --help >/dev/null 2>&1; then
-  d="$TMP/v"; mkdir -p "$d/out"
-  if "$VID" embed --cover "$TMP/cover.bmp" --secret "$TMP/secret.bin" \
-        --output "$d/stego.avi" --seed 7 >/dev/null 2>&1 \
-     && "$VID" extract --stego "$d/stego.avi" --seed 7 --output "$d/out/secret.bin" >/dev/null 2>&1 \
-     && cmp -s "$d/out/secret.bin" "$TMP/secret.bin"; then
-    ok "video plain (seed 7)"
-  else
-    bad "video plain"
-  fi
+if [ -x "$VID" ] && "$VID" --help >/dev/null 2>&1 && command -v ffmpeg >/dev/null; then
+  d="$TMP/v"; mkdir -p "$d"
+  ffmpeg -loglevel error -f lavfi -i testsrc=duration=1:size=320x240:rate=30 \
+         -c:v ffv1 "$d/cover.avi" >/dev/null 2>&1
+  MSG="StegoNinja video roundtrip 42"
+  video_case(){ # label, embed-extra..., -- , extract-extra...
+    local label="$1"; shift
+    local emb=(); local ext=()
+    while [ "$1" != "--" ]; do emb+=("$1"); shift; done; shift
+    ext=("$@")
+    local o="$d/$RANDOM"
+    "$VID" embed --cover "$d/cover.avi" --message "$MSG" --output "$o.avi" "${emb[@]}" >/dev/null 2>&1
+    "$VID" extract --stego "$o.avi" --output "$o.txt" "${ext[@]}" >/dev/null 2>&1
+    if head -c ${#MSG} "$o.txt" 2>/dev/null | cmp -s - <(printf '%s' "$MSG"); then ok "$label"; else bad "$label"; fi
+  }
+  video_case "plain (seed 7)" --seed 7 --
+  video_case "encrypted (--key)" --seed 3 --key vk -- --key vk
 else
-  skip "SteganoVid non-interactive mode unavailable (needs OpenCV build + flags)"
+  skip "SteganoVid non-interactive mode / ffmpeg unavailable"
 fi
 
 log ""
