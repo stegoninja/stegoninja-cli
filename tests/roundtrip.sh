@@ -70,6 +70,16 @@ else
   skip "BPCS binaries not built"
 fi
 
+# -------------------------------------------------------- image LSB (text) ---
+log "image LSB text (PNG):"
+LTXT="$BUILD/lsb_text_test"
+if [ -x "$LTXT" ]; then
+  d="$TMP/ltxt"; mkdir -p "$d"
+  if "$LTXT" "$d" >/dev/null 2>&1; then ok "text round-trip + magic guard"; else bad "text round-trip / magic guard"; fi
+else
+  skip "lsb_text_test not built (needs OpenCV)"
+fi
+
 # ------------------------------------------------------------------ video LSB -
 # Video hides a single-line text MESSAGE (not a binary file); the recovered
 # file is the message plus a trailing NUL+newline, so compare the leading bytes.

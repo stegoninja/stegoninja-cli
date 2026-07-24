@@ -71,6 +71,14 @@ if(OpenCV_FOUND AND CURSES_FOUND)
         Threads::Threads
     )
 
+    # Test harness for the ncurses-free text-LSB path.
+    add_executable(lsb_text_test tests/lsb_text_test.cpp src/stegano.cpp src/vigenere.cpp)
+    target_link_libraries(lsb_text_test
+        ${OpenCV_LIBS}
+        ${CURSES_LIBRARIES}
+        Threads::Threads
+    )
+
     list(APPEND OPENCV_TOOLS SteganoImgLsb SteganoVid)
 else()
     message(WARNING

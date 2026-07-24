@@ -21,7 +21,11 @@ bool Stegano::embedMessage(const std::string &inputImage,
     return false;
   }
 
-  int msgLen = message.length();
+  // Frame the payload with a format magic so the text extractor can tell a
+  // text-LSB stego apart from an image-in-image stego (a different format that
+  // must not be decoded here) or an ordinary image.
+  const std::string framed = std::string("SN1M") + message;
+  int msgLen = framed.length();
   if (msgLen * 8 > img.rows * img.cols * 3) {
     return false; // message too big
   }
@@ -34,7 +38,7 @@ bool Stegano::embedMessage(const std::string &inputImage,
       for (int ch = 0; ch < img.channels(); ++ch) {
         uchar &pixel = img.at<cv::Vec3b>(row, col)[ch];
         pixel &= 0xFE; // clear LSB
-        pixel |= ((message[msgIndex] >> bitIndex) & 1);
+        pixel |= ((framed[msgIndex] >> bitIndex) & 1);
         ++bitIndex;
         if (bitIndex == 8) {
           bitIndex = 0;
@@ -59,7 +63,8 @@ bool Stegano::embedImage(const cv::Mat &carrier, const cv::Mat &secret,
   cv::imencode(".png", secret, secretBuffer);
   // Total number of bits to embed
   size_t dataSize = secretBuffer.size();
-  size_t totalBits = (8 * 8) + (dataSize * 8); // 8-byte header + data
+  size_t totalBits =
+      (4 * 8) + (8 * 8) + (dataSize * 8); // magic + 8-byte header + data
 
   // Capacity: rows * cols * 3 channels
   size_t capacity = carrier_img.rows * carrier_img.cols * 3;
@@ -85,7 +90,8 @@ bool Stegano::embedImage(const cv::Mat &carrier, const cv::Mat &secret,
     sizeBuffer[i] = (static_cast<uint64_t>(dataSize) >> (8 * i)) & 0xFF;
 
   // Merge sizeBuffer and encryptedData into one vector
-  std::vector<unsigned char> payload(sizeBuffer);
+  std::vector<unsigned char> payload = {'S', 'N', '1', 'I'};
+  payload.insert(payload.end(), sizeBuffer.begin(), sizeBuffer.end());
   payload.insert(payload.end(), secretBuffer.begin(), secretBuffer.end());
 
   // Start embedding bits
@@ -219,7 +225,8 @@ bool Stegano::embedImage(const cv::Mat &carrier, const cv::Mat &secret,
 
   // Total number of bits to embed
   size_t dataSize = encryptedData.size();
-  size_t totalBits = (8 * 8) + (dataSize * 8); // 8-byte header + data
+  size_t totalBits =
+      (4 * 8) + (8 * 8) + (dataSize * 8); // magic + 8-byte header + data
 
   // Capacity: rows * cols * 3 channels
   size_t capacity = carrier_img.rows * carrier_img.cols * 3;
@@ -244,7 +251,8 @@ bool Stegano::embedImage(const cv::Mat &carrier, const cv::Mat &secret,
     sizeBuffer[i] = (static_cast<uint64_t>(dataSize) >> (8 * i)) & 0xFF;
 
   // Merge sizeBuffer and encryptedData into one vector
-  std::vector<unsigned char> payload(sizeBuffer);
+  std::vector<unsigned char> payload = {'S', 'N', '1', 'I'};
+  payload.insert(payload.end(), sizeBuffer.begin(), sizeBuffer.end());
   payload.insert(payload.end(), encryptedData.begin(), encryptedData.end());
 
   // Start embedding bits
@@ -379,7 +387,13 @@ bool Stegano::extractMessage(const std::string &inputImage,
         ++bitIndex;
         if (bitIndex == 8) {
           if (ch == '\0') {
-            message = extracted;
+            // Require the text-format magic; otherwise this is not a text-LSB
+            // stego (e.g. an image-in-image stego or an unrelated image).
+            const std::string magic = "SN1M";
+            if (extracted.rfind(magic, 0) != 0) {
+              return false;
+            }
+            message = extracted.substr(magic.size());
             return true;
           }
           extracted += ch;
@@ -390,8 +404,8 @@ bool Stegano::extractMessage(const std::string &inputImage,
     }
   }
 
-  message = extracted;
-  return true;
+  // No terminator found: not a valid text-LSB payload.
+  return false;
 }
 
 bool Stegano::embedData(const cv::Mat &coverImage,
@@ -449,6 +463,31 @@ int Stegano::bytesToInt(const std::vector<unsigned char> &bytes) {
 bool Stegano::extractImage(const cv::Mat &carrier_img, const std::string &key,
                            const std::string &outputPath) {
   size_t bitIndex = 0;
+
+  // Verify the image-format magic ("SN1I") before trusting the header, so a
+  // text-LSB stego or unrelated image is rejected instead of misdecoded.
+  {
+    unsigned char magic[4] = {0, 0, 0, 0};
+    for (int i = 0; i < 4; ++i) {
+      unsigned char currentByte = 0;
+      for (int bitPos = 7; bitPos >= 0; --bitPos) {
+        int row = bitIndex / (carrier_img.cols * 3);
+        int col = (bitIndex / 3) % carrier_img.cols;
+        int channel = bitIndex % 3;
+        cv::Vec3b pixel = carrier_img.at<cv::Vec3b>(row, col);
+        currentByte |= ((pixel[channel] & 1) << bitPos);
+        ++bitIndex;
+      }
+      magic[i] = currentByte;
+    }
+    if (!(magic[0] == 'S' && magic[1] == 'N' && magic[2] == '1' &&
+          magic[3] == 'I')) {
+      mvprintw(5, 1, "Not a StegoNinja image-in-image stego (bad magic).\n");
+      refresh();
+      getch();
+      return false;
+    }
+  }
 
   // First extract the payload size (fixed 8-byte little-endian header).
   size_t dataSize = 0;
@@ -531,6 +570,31 @@ bool Stegano::extractImage(const cv::Mat &carrier_img, const std::string &key,
 bool Stegano::extractImage(const cv::Mat &carrier_img,
                            const std::string &outputPath) {
   size_t bitIndex = 0;
+
+  // Verify the image-format magic ("SN1I") before trusting the header, so a
+  // text-LSB stego or unrelated image is rejected instead of misdecoded.
+  {
+    unsigned char magic[4] = {0, 0, 0, 0};
+    for (int i = 0; i < 4; ++i) {
+      unsigned char currentByte = 0;
+      for (int bitPos = 7; bitPos >= 0; --bitPos) {
+        int row = bitIndex / (carrier_img.cols * 3);
+        int col = (bitIndex / 3) % carrier_img.cols;
+        int channel = bitIndex % 3;
+        cv::Vec3b pixel = carrier_img.at<cv::Vec3b>(row, col);
+        currentByte |= ((pixel[channel] & 1) << bitPos);
+        ++bitIndex;
+      }
+      magic[i] = currentByte;
+    }
+    if (!(magic[0] == 'S' && magic[1] == 'N' && magic[2] == '1' &&
+          magic[3] == 'I')) {
+      mvprintw(5, 1, "Not a StegoNinja image-in-image stego (bad magic).\n");
+      refresh();
+      getch();
+      return false;
+    }
+  }
 
   // First extract the payload size (fixed 8-byte little-endian header).
   size_t dataSize = 0;
