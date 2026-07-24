@@ -67,7 +67,12 @@ size_t find_data_chunk(const std::vector<uint8_t>& wav, size_t& data_size) {
         uint32_t chunk_size = *reinterpret_cast<const uint32_t*>(&wav[pos + 4]);
         if (chunk_id == 0x61746164) {
             data_size = chunk_size;
-            return pos + 8;
+            size_t data_start = pos + 8;
+            // Trust but verify: the declared data chunk must fit in the file,
+            // otherwise later wav[pos] reads run off the end (corrupt/truncated).
+            if (data_size > wav.size() - data_start)
+                throw std::runtime_error("Corrupt WAV: data chunk larger than file");
+            return data_start;
         }
         pos += 8 + chunk_size;
     }
@@ -182,13 +187,22 @@ void extract_data(const std::string& stego_file, const std::string& password, bo
     }
     
     if (encrypt) header = Vigenere::vigenereDecrypt(header, password);
-    
+
+    // Validate every field before indexing: a wrong password/flags (or corrupt
+    // stego) yields a garbage header, which must fail cleanly rather than read
+    // out of bounds and crash.
+    const char* corrupt = "Corrupt data, or wrong password/-e/-r flags";
+    if (header.size() < 4) throw std::runtime_error(corrupt);
     uint32_t filename_len = *reinterpret_cast<uint32_t*>(header.data());
+    if (static_cast<uint64_t>(4) + filename_len + 8 > header.size())
+        throw std::runtime_error(corrupt);
     std::string filename(reinterpret_cast<char*>(header.data() + 4), filename_len);
     uint64_t secret_size = *reinterpret_cast<uint64_t*>(header.data() + 4 + filename_len);
-    std::vector<uint8_t> secret(header.begin() + 4 + filename_len + 8, 
+    if (static_cast<uint64_t>(4) + filename_len + 8 + secret_size > header.size())
+        throw std::runtime_error(corrupt);
+    std::vector<uint8_t> secret(header.begin() + 4 + filename_len + 8,
                                 header.begin() + 4 + filename_len + 8 + secret_size);
-    
+
     write_file(filename, secret);
 }
 
