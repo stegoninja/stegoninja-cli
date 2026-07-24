@@ -130,7 +130,7 @@ void embedMessage() {
   cin >> frameMode;
   cout << "Pixel Mode:\n1. Sequential\n2. Random\nChoose: ";
   cin >> pixelMode;
-  cout << "Use Vigenere encryption? (1 = Yes / 0 = No): ";
+  cout << "Use Vigenere encryption? [obfuscation, NOT strong crypto] (1 = Yes / 0 = No): ";
   cin >> encryptFlag;
 
   if (encryptFlag) {

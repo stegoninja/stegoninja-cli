@@ -254,7 +254,7 @@ void embedFlow(std::string path, std::string saveAs) {
   mvprintw(5, 1, "Message to embed: ");
   getstr(message);
 
-  mvprintw(6, 1, "Encrypt message? (1 = Yes, 0 = No): ");
+  mvprintw(6, 1, "Encrypt? [Vigenere = obfuscation, NOT strong crypto] (1=Yes,0=No): ");
   scanw("%d", &encryptChoice);
 
   std::string finalMessage = message;
@@ -515,7 +515,7 @@ int main() {
         int encryptChoice = 0;
         // Confirmed if it's want to be encrypted or not
         echo();
-        mvprintw(1, 1, "Encrypt message? (1 = Yes, 0 = No): ");
+        mvprintw(1, 1, "Encrypt? [Vigenere = obfuscation, NOT strong crypto] (1=Yes,0=No): ");
         scanw("%d", &encryptChoice);
 
         char key[26];
@@ -566,7 +566,7 @@ int main() {
         int encryptChoice = 0;
         // Confirmed if it's want to be encrypted or not
         echo();
-        mvprintw(1, 1, "Encrypt message? (1 = Yes, 0 = No): ");
+        mvprintw(1, 1, "Encrypt? [Vigenere = obfuscation, NOT strong crypto] (1=Yes,0=No): ");
         scanw("%d", &encryptChoice);
 
         char key[26];

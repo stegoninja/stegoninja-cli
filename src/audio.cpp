@@ -200,7 +200,12 @@ int main(int argc, char* argv[]) {
         if (argc < 2) {
             std::cerr << "Usage:\n"
                       << "  " << argv[0] << " embed <cover.wav> <secret> <output> [password] [-e] [-r]\n"
-                      << "  " << argv[0] << " extract <stego.wav> [password] [-e] [-r]\n";
+                      << "  " << argv[0] << " extract <stego.wav> [password] [-e] [-r]\n"
+                      << "\nOptions:\n"
+                      << "  -e   Vigenere-encrypt the payload with <password>.\n"
+                      << "       NOTE: this is a byte-shift obfuscation, NOT strong encryption.\n"
+                      << "  -r   Randomize sample positions using <password> as the seed.\n"
+                      << "  Extract must use the SAME password and -e/-r flags as embed.\n";
             return 1;
         }
         
