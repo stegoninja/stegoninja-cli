@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(SteganoTUI CXX)
+project(SteganoTUI VERSION 1.0.0 LANGUAGES CXX)
 
 # Set C++ version
 set(CMAKE_CXX_STANDARD 17)
@@ -65,3 +65,16 @@ endif()
 # Install every built target (see packaging).
 install(TARGETS ${STANDALONE_TOOLS} ${OPENCV_TOOLS}
     RUNTIME DESTINATION bin)
+install(FILES README.md DESTINATION share/doc/stegoninja-cli OPTIONAL)
+
+# ---------------------------------------------------------------------------
+# Packaging: `cpack -B <dir>` builds a distributable tarball of the binaries.
+# ---------------------------------------------------------------------------
+set(CPACK_PACKAGE_NAME "stegoninja-cli")
+set(CPACK_PACKAGE_VENDOR "StegoNinja")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Offline steganography CLI/TUI tools")
+set(CPACK_GENERATOR "TGZ")
+set(CPACK_PACKAGE_FILE_NAME
+    "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}")
+include(CPack)

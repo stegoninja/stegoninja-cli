@@ -95,6 +95,17 @@ It covers audio `{plain, -e, -r, -e -r}` (plus a wrong-password rejection case) 
 `{no-password, with-password}`. Video is exercised when a non-interactive `SteganoVid` is
 present; the interactive image TUI is out of scope for the harness.
 
+## Packaging & install
+
+```shell
+scripts/build.sh                       # configure + build into ./build
+scripts/build.sh --install /usr/local  # install binaries to <prefix>/bin
+scripts/build.sh --package             # build a dist tarball via CPack (TGZ)
+```
+
+`--package` produces `build/stegoninja-cli-<version>-<system>.tar.gz` containing the
+built binaries. The project version is set in `CMakeLists.txt` (`project(... VERSION ...)`).
+
 ## Relationship to `stegoninja-api`
 
 The steganography engine originated as a shared copy of `../stegoninja-api` (the source of
