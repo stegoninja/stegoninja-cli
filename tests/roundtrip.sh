@@ -102,6 +102,7 @@ if [ -x "$VID" ] && "$VID" --help >/dev/null 2>&1 && command -v ffmpeg >/dev/nul
   }
   video_case "plain (seed 7)" --seed 7 --
   video_case "encrypted (--key)" --seed 3 --key vk -- --key vk
+  video_case "random frame+pixel" --seed 9 --frame-mode rand --pixel-mode rand --
 else
   skip "SteganoVid non-interactive mode / ffmpeg unavailable"
 fi

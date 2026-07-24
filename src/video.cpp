@@ -308,9 +308,13 @@ void extractMessageBits(vector<bool> &bits, VideoCapture &cap, int totalBits,
   if (frameMode)
     shuffle(frameIndices.begin() + 1, frameIndices.end(), rng);
 
-  // Start from frame 1, since frame 0 contains metadata
+  // Start from frame 1, since frame 0 contains metadata.
+  // Embed writes frames in sequential output order (the frame shuffle above only
+  // chooses which source frame supplies each slot and, crucially, advances the
+  // shared RNG so per-frame pixel shuffles stay in sync). The message therefore
+  // lands in stego frames 1,2,3,... in order, so read them sequentially.
   for (int i = 1; i < totalFrames && totalBits > 0; ++i) {
-    int frameNumber = (frameMode) ? frameIndices[i] : i;
+    int frameNumber = i;
     cap.set(CAP_PROP_POS_FRAMES, frameNumber);
 
     Mat frame;
