@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(SteganoTUI)
+project(SteganoTUI CXX)
 
 # Set C++ version
 set(CMAKE_CXX_STANDARD 17)
@@ -9,45 +9,59 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Include header files from "include" directory
-include_directories(include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# Define the source files
-set(SOURCES_IMG
-    src/main.cpp
-    src/stegano.cpp
-    src/vigenere.cpp
-)
+# ---------------------------------------------------------------------------
+# Standalone tools — no OpenCV / ncurses needed. Always built.
+#   audio          : audio LSB over WAV PCM
+#   imgBPCSEmbed   : image BPCS embed (raw BMP)
+#   imgBPCSExtract : image BPCS extract (raw BMP)
+# ---------------------------------------------------------------------------
+add_executable(audio          src/audio.cpp)
+add_executable(imgBPCSEmbed   src/imgBPCSEmbed.cpp)
+add_executable(imgBPCSExtract src/imgBPCSExtract.cpp)
 
-set (SOURCES_VID
-    src/video.cpp
-)
+set(STANDALONE_TOOLS audio imgBPCSEmbed imgBPCSExtract)
 
-# Find ncurses library
-find_package(Curses REQUIRED)
-find_package(OpenCV REQUIRED)
+# ---------------------------------------------------------------------------
+# OpenCV / ncurses tools — built only when their dependencies are present so
+# the standalone tools remain buildable on minimal toolchains.
+#   SteganoImgLsb : image LSB TUI  (OpenCV + Curses + Threads)
+#   SteganoVid    : video LSB      (OpenCV + Threads)
+# ---------------------------------------------------------------------------
+find_package(OpenCV QUIET)
+find_package(Curses QUIET)
 find_package(Threads REQUIRED)
 
-include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${OpenCV_INCLUDE_DIRS}
-    ${CURSES_INCLUDE_DIR}
-)
+set(OPENCV_TOOLS "")
 
-# Define the executable
-add_executable(SteganoImgLsb ${SOURCES_IMG})
+if(OpenCV_FOUND AND CURSES_FOUND)
+    include_directories(${OpenCV_INCLUDE_DIRS} ${CURSES_INCLUDE_DIR})
 
-add_executable(SteganoVid ${SOURCES_VID})
+    add_executable(SteganoImgLsb
+        src/main.cpp
+        src/stegano.cpp
+        src/vigenere.cpp
+    )
+    target_link_libraries(SteganoImgLsb
+        ${OpenCV_LIBS}
+        ${CURSES_LIBRARIES}
+        Threads::Threads
+    )
 
-# Link libraries
-target_link_libraries(SteganoImgLsb
-    ${OpenCV_LIBS}
-    ${CURSES_LIBRARIES}
-    Threads::Threads
-)
+    add_executable(SteganoVid src/video.cpp)
+    target_link_libraries(SteganoVid
+        ${OpenCV_LIBS}
+        Threads::Threads
+    )
 
+    list(APPEND OPENCV_TOOLS SteganoImgLsb SteganoVid)
+else()
+    message(WARNING
+        "OpenCV and/or Curses not found — skipping SteganoImgLsb and SteganoVid. "
+        "Install libopencv-dev and libncurses-dev to build the image LSB TUI and video tool.")
+endif()
 
-target_link_libraries(SteganoVid
-    ${OpenCV_LIBS}
-    ${CURSES_LIBRARIES}
-    Threads::Threads
-)
+# Install every built target (see packaging).
+install(TARGETS ${STANDALONE_TOOLS} ${OPENCV_TOOLS}
+    RUNTIME DESTINATION bin)

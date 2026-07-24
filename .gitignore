@@ -1,0 +1,16 @@
+# Build output
+build/
+*.o
+*.obj
+
+# CMake artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+
+# Local test scratch
+tests/tmp/
+
+# Note: PRD/, CLAUDE.md and .omc/ are intentionally NOT listed here —
+# they are handled by the global gitignore.
