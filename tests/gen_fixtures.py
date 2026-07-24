@@ -44,6 +44,9 @@ def write_bmp(path, w, h):
 
 write_wav(os.path.join(out, "cover.wav"), 200000)
 write_bmp(os.path.join(out, "cover.bmp"), 128, 128)
+# Small secret image for the image-in-image LSB case (its PNG encoding must fit
+# in the 128x128 cover's capacity).
+write_bmp(os.path.join(out, "secret_img.bmp"), 16, 16)
 with open(os.path.join(out, "secret.bin"), "wb") as f:
     f.write(bytes((i * 97 + 13) % 256 for i in range(2048)))
 
