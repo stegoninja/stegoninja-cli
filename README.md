@@ -1,50 +1,52 @@
-# StegoNinja CLI/TUI
+# StegoNinja
 
 StegoNinja hides (embeds) and recovers (extracts) a secret file or message inside a cover
-**image**, **audio**, or **video** file using steganography. This repository is the
-**offline CLI / TUI client** — C++17 programs that run entirely on your machine with no
-network access.
+**image**, **audio**, or **video** file using steganography. It runs entirely on your
+machine with no network access, and ships as **two binaries over one shared engine**:
+
+| Binary | Front-end | Techniques |
+|--------|-----------|------------|
+| `stegoninja` | scriptable **CLI** (subcommands, `--help`, exit codes) | Image LSB, Image BPCS, Audio LSB, Video LSB |
+| `stegoninja-tui` | interactive **ncurses TUI** (menus, file browser, preview + PSNR) | Image LSB, Image BPCS, Audio LSB, Video LSB |
+
+Both front-ends link the same `stegoninja_engine` library, so **every technique and option
+is reachable from either binary** — the CLI for automation, the TUI for guided use.
 
 > The HTTP **web API** half of StegoNinja lives in the sibling repo `../stegoninja-api`.
 > This repo does not build or run a server.
 
-Supported techniques:
+Techniques:
 
-| Media | Technique | Tool |
-|-------|-----------|------|
-| Image | LSB (text & image-in-image) | `SteganoImgLsb` (ncurses TUI) |
-| Image | BPCS (Bit-Plane Complexity Segmentation) | `imgBPCSEmbed` / `imgBPCSExtract` |
-| Audio | LSB over WAV PCM | `audio` |
-| Video | LSB over frames (lossless FFV1/AVI) | `SteganoVid` |
+| Media | Technique |
+|-------|-----------|
+| Image | LSB — hide a text message **or** an image-in-image |
+| Image | BPCS (Bit-Plane Complexity Segmentation) over 24-bit BMP |
+| Audio | LSB over WAV PCM |
+| Video | LSB over frames (lossless FFV1/AVI) |
 
 Optional **Vigenère** payload obfuscation and password-seeded position **randomization**
-are available on several tools. Note: the Vigenère scheme is a byte-shift *obfuscation*,
+are available per technique. Note: the Vigenère scheme is a byte-shift *obfuscation*,
 **not strong encryption**.
 
 ## Build
 
-Requires a C++17 compiler and CMake. **OpenCV** and **ncurses** are optional — they are
-only needed for the image LSB TUI and the video tool.
+Requires a C++17 compiler, CMake, **OpenCV** (image + video), and **ncurses** (the TUI).
 
 ```shell
 cmake -S . -B build && cmake --build build
 ```
 
-- Always built (no OpenCV needed): `audio`, `imgBPCSEmbed`, `imgBPCSExtract`.
-- Built only when OpenCV **and** ncurses are found: `SteganoImgLsb`, `SteganoVid`.
-  If they are missing, CMake prints a warning and skips those two targets.
+One build produces exactly two binaries in `build/`: `stegoninja` and `stegoninja-tui`
+(plus the `lsb_text_test` engine harness). If OpenCV is missing, CMake warns and builds
+nothing runnable; if only ncurses is missing, it builds the CLI alone.
 
-To get the full toolset on Debian/Ubuntu:
+On Debian/Ubuntu:
 
 ```shell
 sudo apt-get install -y build-essential cmake libopencv-dev libncurses-dev
 ```
 
-Binaries are written to `build/`. `cmake --install build --prefix <dir>` installs them.
-
 ### Building on macOS
-
-Install the dependencies with Homebrew, then build as above:
 
 ```shell
 brew install cmake opencv ncurses
@@ -52,90 +54,82 @@ cmake -S . -B build && cmake --build build
 ```
 
 CMake automatically adds the Homebrew prefixes (`/opt/homebrew` on Apple Silicon,
-`/usr/local` on Intel) to its search path, so OpenCV and ncurses are found without extra
-flags. Homebrew's OpenCV bundles ffmpeg, so the video tool's lossless FFV1 codec is
-available. If ncurses is not found, pass it explicitly:
+`/usr/local` on Intel), so OpenCV and ncurses are found without extra flags. Homebrew's
+OpenCV bundles ffmpeg, so the video technique's lossless FFV1 codec is available. If
+ncurses is not found, pass it explicitly:
 
 ```shell
 cmake -S . -B build -DCMAKE_PREFIX_PATH="$(brew --prefix ncurses);$(brew --prefix opencv)"
 ```
 
-The standalone `audio`, `imgBPCSEmbed`, and `imgBPCSExtract` tools need only a C++17
-compiler and build on macOS with no extra dependencies.
+## CLI usage (`stegoninja`)
 
-## Usage
-
-### Audio LSB (`audio`)
-
-```shell
-audio embed  <cover.wav> <secret> <output.wav> [password] [-e] [-r]
-audio extract <stego.wav>              [password] [-e] [-r]
+```
+stegoninja <technique> <embed|extract> [options]
+stegoninja --help            # techniques + common options
+stegoninja <technique> --help
 ```
 
-`-e` Vigenère-encrypts the payload with `password`; `-r` randomizes sample positions using
-`password` as the seed. Extraction must use the **same** password and `-e`/`-r` flags.
-
-### Image BPCS (`imgBPCSEmbed` / `imgBPCSExtract`)
-
-```shell
-imgBPCSEmbed  <cover.bmp> <secret_file> <output.bmp>   # prompts for a password (blank = none)
-imgBPCSExtract <stego.bmp> <output_directory>          # prompts for the same password
-```
-
-Covers must be 24-bit BMP. A non-empty password enables encryption + randomization.
-
-### Image LSB TUI (`SteganoImgLsb`)
+Options share one vocabulary across techniques: `--cover`, `--secret`, `--stego`,
+`--output`, `--message` / `--message-file`, `--password` (`--key` alias), `--encrypt`,
+`--randomize`, `--seed`, `--frame-mode seq|rand`, `--pixel-mode seq|rand`. Every path is
+non-interactive and exits non-zero on error.
 
 ```shell
-./build/SteganoImgLsb
+# Image LSB — text, and image-in-image (extract auto-detects which)
+stegoninja image-lsb embed   --cover cover.png --message "hi" --output stego.png [--encrypt --password k]
+stegoninja image-lsb embed   --cover cover.png --secret secret.png --output stego.png
+stegoninja image-lsb extract --stego stego.png [--output out.png] [--encrypt --password k]
+
+# Image BPCS (24-bit BMP cover; --password enables Vigenère + block shuffle)
+stegoninja bpcs  embed   --cover cover.bmp --secret file --output stego.bmp [--password k]
+stegoninja bpcs  extract --stego stego.bmp --output ./out [--password k]
+
+# Audio LSB (PCM WAV cover)
+stegoninja audio embed   --cover cover.wav --secret file --output stego.wav [--encrypt --randomize --password k]
+stegoninja audio extract --stego stego.wav [--output ./out] [--encrypt --randomize --password k]
+
+# Video LSB (lossless FFV1/AVI output; --seed is 0..31, stored in-band)
+stegoninja video embed   --cover in.avi --message "secret" --output stego.avi [--seed N --frame-mode rand --pixel-mode rand --encrypt --password k]
+stegoninja video extract --stego stego.avi [--output out.txt] [--password k]
 ```
 
-An interactive ncurses menu: embed/extract a **text message** or an **image-in-image**,
-with a side-by-side cover/stego preview and a PSNR score. Requires OpenCV and ncurses.
+Extraction must use the **same** password, flags, and (video) seed as embedding.
+
+## TUI usage (`stegoninja-tui`)
+
+```shell
+./build/stegoninja-tui
+```
+
+An arrow-key menu selects the technique, then embed/extract, guiding you through inputs
+with a file browser (filtered to each technique's file types). Image embeds show a
+side-by-side cover/stego preview and a PSNR score.
 
 Set **`STEGO_NO_PREVIEW=1`** (or run with no `DISPLAY`) to skip the OpenCV preview windows
-so it works headless/over SSH; PSNR is still reported:
+so it works headless/over SSH; metrics are still reported:
 
 ```shell
-STEGO_NO_PREVIEW=1 ./build/SteganoImgLsb
+STEGO_NO_PREVIEW=1 ./build/stegoninja-tui
 ```
 
-The text and image-in-image formats are tagged with distinct magic markers, so extracting
-one with the other mode is rejected rather than silently producing garbage.
-
-### Video LSB (`SteganoVid`)
-
-Interactive menu (no arguments):
-
-```shell
-./build/SteganoVid
-```
-
-Or non-interactive / scriptable:
-
-```shell
-./build/SteganoVid embed --cover in.avi --message "secret" --output stego.avi \
-      [--seed N] [--frame-mode seq|rand] [--pixel-mode seq|rand] [--key <k>]
-./build/SteganoVid extract --stego stego.avi [--output out.txt] [--key <k>]
-./build/SteganoVid --help
-```
-
-Video hides a single-line text message; output is a lossless FFV1/AVI. `--seed` must be
-0..31 and must match between embed and extract. Requires OpenCV.
+The text and image-in-image formats are tagged with distinct magic markers (`SN1M` /
+`SN1I`), so extracting one as the other is rejected rather than silently producing garbage.
 
 ## Testing
 
-A scriptable round-trip harness verifies byte-exact embed→extract:
+A scriptable round-trip harness verifies byte-exact embed→extract through the CLI:
 
 ```shell
-cmake --build build          # build the tools first
-bash tests/roundtrip.sh      # audio + BPCS always; video when available
+cmake --build build
+bash tests/roundtrip.sh
 ```
 
-It covers audio `{plain, -e, -r, -e -r}` (plus a wrong-password rejection case), BPCS
-`{no-password, with-password}`, the image text-LSB path (round-trip + magic guard, via the
-`lsb_text_test` target), and video `{plain, encrypted, random frame+pixel}` when ffmpeg and
-a non-interactive `SteganoVid` are present. The interactive image TUI menu is out of scope.
+It covers audio `{plain, encrypt, randomize, encrypt+randomize}` plus a wrong-password
+rejection case, BPCS `{no-password, with-password}`, image LSB text `{plain, encrypted}`,
+image-in-image, and video `{plain, encrypted, random frame+pixel}` when ffmpeg is present.
+The `lsb_text_test` target additionally exercises the engine's text path directly (round
+-trip, encryption, magic-guard rejection, mode detection).
 
 ## Packaging & install
 
@@ -145,23 +139,25 @@ scripts/build.sh --install /usr/local  # install binaries to <prefix>/bin
 scripts/build.sh --package             # build a dist tarball via CPack (TGZ)
 ```
 
-`--package` produces `build/stegoninja-cli-<version>-<system>.tar.gz` containing the
-built binaries. The project version is set in `CMakeLists.txt` (`project(... VERSION ...)`).
+`--package` produces `build/stegoninja-<version>-<system>.tar.gz` containing the two
+binaries. The project version is set in `CMakeLists.txt` (`project(... VERSION ...)`).
 
 ## Relationship to `stegoninja-api`
 
 The steganography engine originated as a shared copy of `../stegoninja-api` (the source of
-truth for the hosted service). This client has since **intentionally diverged** from that
-upstream — stego files produced here are no longer guaranteed to interoperate with the API
-for changed formats. Notable client-only changes:
+truth for the hosted service) but has since **intentionally diverged**. Stego files
+produced here are no longer guaranteed to interoperate with the API for changed formats,
+and there is no ongoing sync requirement. Notable client-line changes:
 
+- Consolidated the four techniques into one shared engine library behind a clean
+  embed/extract API, linked by both front-ends.
+- Unified everything into two binaries (`stegoninja` CLI + `stegoninja-tui`), each covering
+  all four techniques — replacing the previous five separate programs with mixed interfaces.
+- Length-prefixed the image text-LSB frame so optional obfuscation can carry any byte.
 - Consolidated the Vigenère cipher into a single shared implementation.
 - Hardened audio extraction against crashes on wrong password / corrupt input.
-- Made the CMake build tolerate a missing OpenCV and build the standalone tools.
 - Labeled the Vigenère option as obfuscation, not encryption, throughout.
-- Replaced the native `size_t` image length header with a portable 8-byte little-endian
-  one (byte-identical on x86-64).
+- Replaced the native `size_t` image length header with a portable little-endian one.
 - Tagged the text and image-in-image LSB payloads with distinct format magics.
-- Added a non-interactive/scriptable mode and `--help` to the video tool, and fixed
-  random frame-mode extraction.
-- Added a headless (no-preview) mode to the image LSB TUI.
+- Made the video technique fully scriptable and fixed random frame-mode extraction.
+- Added a headless (no-preview) mode to the TUI.

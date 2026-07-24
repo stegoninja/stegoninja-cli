@@ -28,4 +28,4 @@ while [ $# -gt 0 ]; do
 done
 
 echo "Built binaries in $BUILD:"
-ls -1 "$BUILD" | grep -E '^(audio|imgBPCS(Embed|Extract)|SteganoImgLsb|SteganoVid)$' || true
+ls -1 "$BUILD" | grep -E '^(stegoninja|stegoninja-tui)$' || true
