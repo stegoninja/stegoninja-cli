@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -56,19 +57,35 @@ std::vector<RGB> readBMP(const std::string &filename, int &width, int &height) {
   BMPInfoHeader infoHeader;
   file.read(reinterpret_cast<char *>(&fileHeader), sizeof(fileHeader));
   file.read(reinterpret_cast<char *>(&infoHeader), sizeof(infoHeader));
+  if (!file)
+    throw std::runtime_error("Truncated BMP header: " + filename);
 
   if (fileHeader.fileType != 0x4D42 || infoHeader.headerSize != 40 ||
       infoHeader.bitCount != 24 || infoHeader.compression != 0)
     throw std::runtime_error("Unsupported BMP format (need 24-bit uncompressed)");
 
+  // Dimensions come from the (untrusted) header. Validate sign and magnitude in
+  // 64-bit before any 32-bit size math, so a hostile BMP cannot overflow
+  // `rowSize`/`dataSize`/`width*height` into a small allocation + OOB access.
+  if (infoHeader.width <= 0 || infoHeader.height == 0)
+    throw std::runtime_error("Invalid BMP dimensions");
   width = infoHeader.width;
   height = std::abs(infoHeader.height);
-  int rowSize = (width * 3 + 3) & ~3;
-  int dataSize = rowSize * height;
+  const uint64_t kMaxPixels = 200ull * 1000 * 1000; // generous sane cap
+  uint64_t rowSize64 = ((static_cast<uint64_t>(width) * 3) + 3) & ~3ull;
+  uint64_t dataSize64 = rowSize64 * static_cast<uint64_t>(height);
+  if (static_cast<uint64_t>(width) * height > kMaxPixels ||
+      dataSize64 > 4 * kMaxPixels)
+    throw std::runtime_error("BMP too large");
+
+  int rowSize = static_cast<int>(rowSize64);
+  int dataSize = static_cast<int>(dataSize64);
 
   std::vector<uint8_t> data(dataSize);
   file.seekg(fileHeader.offsetData);
   file.read(reinterpret_cast<char *>(data.data()), dataSize);
+  if (file.gcount() != dataSize)
+    throw std::runtime_error("Truncated BMP pixel data: " + filename);
 
   std::vector<RGB> pixels(width * height);
   bool isBottomUp = infoHeader.height > 0;
@@ -123,8 +140,10 @@ std::vector<uint8_t> readFile(const std::string &filename) {
   if (!file)
     throw std::runtime_error("Failed to open file: " + filename);
   std::streamsize size = file.tellg();
+  if (size < 0)
+    throw std::runtime_error("Failed to size file: " + filename);
   file.seekg(0, std::ios::beg);
-  std::vector<uint8_t> buffer(size);
+  std::vector<uint8_t> buffer(static_cast<size_t>(size));
   if (size > 0 && !file.read(reinterpret_cast<char *>(buffer.data()), size))
     throw std::runtime_error("Failed to read file: " + filename);
   return buffer;
@@ -285,8 +304,8 @@ std::string extract(const std::string &stegoPath, const std::string &outDir,
   if (data.size() < headerSize)
     throw std::runtime_error(corrupt);
   std::string filename(data.begin() + 1, data.begin() + 1 + filenameLength);
-  uint32_t secretLength =
-      *reinterpret_cast<const uint32_t *>(&data[1 + filenameLength]);
+  uint32_t secretLength;
+  std::memcpy(&secretLength, &data[1 + filenameLength], 4);
   size_t totalSize = headerSize + secretLength;
   if (data.size() < totalSize)
     throw std::runtime_error(corrupt);

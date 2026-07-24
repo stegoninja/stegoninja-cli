@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <numeric>
@@ -20,7 +21,10 @@ std::vector<uint8_t> readFile(const std::string &filename) {
   std::ifstream file(filename, std::ios::binary | std::ios::ate);
   if (!file)
     throw std::runtime_error("Failed to open file: " + filename);
-  std::vector<uint8_t> data(file.tellg());
+  std::streamsize size = file.tellg();
+  if (size < 0)
+    throw std::runtime_error("Failed to size file: " + filename);
+  std::vector<uint8_t> data(static_cast<size_t>(size));
   file.seekg(0, std::ios::beg);
   if (!data.empty())
     file.read(reinterpret_cast<char *>(data.data()), data.size());
@@ -58,8 +62,9 @@ size_t findDataChunk(const std::vector<uint8_t> &wav, size_t &dataSize) {
     throw std::runtime_error("Not a WAV file (too short)");
   size_t pos = 12;
   while (pos + 8 <= wav.size()) {
-    uint32_t chunkId = *reinterpret_cast<const uint32_t *>(&wav[pos]);
-    uint32_t chunkSize = *reinterpret_cast<const uint32_t *>(&wav[pos + 4]);
+    uint32_t chunkId, chunkSize;
+    std::memcpy(&chunkId, &wav[pos], 4);
+    std::memcpy(&chunkSize, &wav[pos + 4], 4);
     if (chunkId == 0x61746164) { // "data"
       dataSize = chunkSize;
       size_t dataStart = pos + 8;
@@ -67,7 +72,8 @@ size_t findDataChunk(const std::vector<uint8_t> &wav, size_t &dataSize) {
         throw std::runtime_error("Corrupt WAV: data chunk larger than file");
       return dataStart;
     }
-    pos += 8 + chunkSize;
+    // Promote to size_t before adding so a hostile 32-bit chunkSize cannot wrap.
+    pos += static_cast<size_t>(chunkSize) + 8;
   }
   throw std::runtime_error("Could not find WAV data chunk");
 }
@@ -160,7 +166,8 @@ std::string extract(const std::string &stegoPath, const std::string &outDir,
   };
 
   auto headerSizeBytes = readBits(0, 8);
-  uint64_t headerSize = *reinterpret_cast<uint64_t *>(headerSizeBytes.data());
+  uint64_t headerSize;
+  std::memcpy(&headerSize, headerSizeBytes.data(), 8);
   if (headerSize > dataSize)
     throw std::runtime_error("Invalid header size (wrong password/flags?)");
 
@@ -170,20 +177,25 @@ std::string extract(const std::string &stegoPath, const std::string &outDir,
 
   // Validate every field before indexing so a wrong password/flags (or corrupt
   // stego) fails cleanly instead of reading out of bounds.
+  // Validate every field with subtraction (never additions that could overflow
+  // in 64-bit) so a wrong password/flags or hostile stego fails cleanly.
   const char *corrupt = "Corrupt data, or wrong password / encrypt / randomize";
-  if (header.size() < 4)
+  if (header.size() < 12) // need 4-byte filename_len + 8-byte secret_size
     throw std::runtime_error(corrupt);
-  uint32_t filenameLen = *reinterpret_cast<uint32_t *>(header.data());
-  if (static_cast<uint64_t>(4) + filenameLen + 8 > header.size())
+  uint32_t filenameLen;
+  std::memcpy(&filenameLen, header.data(), 4);
+  if (filenameLen > header.size() - 12) // leaves room for the 8-byte size field
     throw std::runtime_error(corrupt);
+  size_t sizeOff = static_cast<size_t>(4) + filenameLen;
   std::string filename(reinterpret_cast<char *>(header.data() + 4), filenameLen);
-  uint64_t secretSize =
-      *reinterpret_cast<uint64_t *>(header.data() + 4 + filenameLen);
-  if (static_cast<uint64_t>(4) + filenameLen + 8 + secretSize > header.size())
+  uint64_t secretSize;
+  std::memcpy(&secretSize, header.data() + sizeOff, 8);
+  size_t secretOff = sizeOff + 8; // <= header.size() by the guard above
+  if (secretSize > header.size() - secretOff)
     throw std::runtime_error(corrupt);
 
-  std::vector<uint8_t> secret(header.begin() + 4 + filenameLen + 8,
-                              header.begin() + 4 + filenameLen + 8 + secretSize);
+  std::vector<uint8_t> secret(header.begin() + secretOff,
+                              header.begin() + secretOff + secretSize);
 
   std::filesystem::path outPath(outDir);
   if (!outPath.empty() && !std::filesystem::exists(outPath))

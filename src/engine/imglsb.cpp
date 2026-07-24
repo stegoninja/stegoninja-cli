@@ -31,7 +31,8 @@ struct BitReader {
 // else LSB-first within each byte. Throws if the stream is too short.
 std::vector<unsigned char> readBytes(const BitReader &r, size_t start,
                                      size_t count, bool msbFirst) {
-  if (start + count * 8 > r.capacity)
+  // Guard without a multiply that could overflow for a hostile 64-bit `count`.
+  if (start > r.capacity || count > (r.capacity - start) / 8)
     throw std::runtime_error("Stego image too small for payload (corrupt or "
                              "wrong format)");
   std::vector<unsigned char> out(count, 0);

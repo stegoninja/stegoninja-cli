@@ -10,6 +10,13 @@
 // NOTE (option handling differs from the LSB tools, by design): a non-empty
 // password enables BOTH Vigenere obfuscation AND a password-seeded block
 // shuffle; an empty password does neither. Extract must use the same password.
+//
+// KNOWN LIMITATION: this is a simplified BPCS without a conjugation map. Extract
+// recomputes the eligible-block set from the STEGO planes, so a low-complexity
+// payload chunk written into an eligible block can drop that block below the
+// complexity threshold and desync embed/extract. High-entropy payloads (e.g.
+// compressed/encrypted files) keep complexity high and round-trip reliably;
+// adding a conjugation map to guarantee it for all payloads is future work.
 namespace steg {
 namespace bpcs {
 
