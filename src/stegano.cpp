@@ -1,5 +1,6 @@
 #include "stegano.h"
 #include "vigenere.h"
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <ncurses.h>
@@ -58,7 +59,7 @@ bool Stegano::embedImage(const cv::Mat &carrier, const cv::Mat &secret,
   cv::imencode(".png", secret, secretBuffer);
   // Total number of bits to embed
   size_t dataSize = secretBuffer.size();
-  size_t totalBits = (sizeof(size_t) * 8) + (dataSize * 8); // size + data
+  size_t totalBits = (8 * 8) + (dataSize * 8); // 8-byte header + data
 
   // Capacity: rows * cols * 3 channels
   size_t capacity = carrier_img.rows * carrier_img.cols * 3;
@@ -77,9 +78,11 @@ bool Stegano::embedImage(const cv::Mat &carrier, const cv::Mat &secret,
     return false;
   }
 
-  // Prepare data: first embed data size
-  std::vector<unsigned char> sizeBuffer(sizeof(size_t));
-  std::memcpy(sizeBuffer.data(), &dataSize, sizeof(size_t));
+  // Prepare data: first embed the payload size as a fixed 8-byte
+  // little-endian header (portable across word size / endianness).
+  std::vector<unsigned char> sizeBuffer(8);
+  for (int i = 0; i < 8; ++i)
+    sizeBuffer[i] = (static_cast<uint64_t>(dataSize) >> (8 * i)) & 0xFF;
 
   // Merge sizeBuffer and encryptedData into one vector
   std::vector<unsigned char> payload(sizeBuffer);
@@ -216,7 +219,7 @@ bool Stegano::embedImage(const cv::Mat &carrier, const cv::Mat &secret,
 
   // Total number of bits to embed
   size_t dataSize = encryptedData.size();
-  size_t totalBits = (sizeof(size_t) * 8) + (dataSize * 8); // size + data
+  size_t totalBits = (8 * 8) + (dataSize * 8); // 8-byte header + data
 
   // Capacity: rows * cols * 3 channels
   size_t capacity = carrier_img.rows * carrier_img.cols * 3;
@@ -234,9 +237,11 @@ bool Stegano::embedImage(const cv::Mat &carrier, const cv::Mat &secret,
     return false;
   }
 
-  // Prepare data: first embed data size
-  std::vector<unsigned char> sizeBuffer(sizeof(size_t));
-  std::memcpy(sizeBuffer.data(), &dataSize, sizeof(size_t));
+  // Prepare data: first embed the payload size as a fixed 8-byte
+  // little-endian header (portable across word size / endianness).
+  std::vector<unsigned char> sizeBuffer(8);
+  for (int i = 0; i < 8; ++i)
+    sizeBuffer[i] = (static_cast<uint64_t>(dataSize) >> (8 * i)) & 0xFF;
 
   // Merge sizeBuffer and encryptedData into one vector
   std::vector<unsigned char> payload(sizeBuffer);
@@ -445,9 +450,9 @@ bool Stegano::extractImage(const cv::Mat &carrier_img, const std::string &key,
                            const std::string &outputPath) {
   size_t bitIndex = 0;
 
-  // First extract data size
+  // First extract the payload size (fixed 8-byte little-endian header).
   size_t dataSize = 0;
-  std::vector<unsigned char> sizeBuffer(sizeof(size_t));
+  std::vector<unsigned char> sizeBuffer(8);
 
   for (size_t i = 0; i < sizeBuffer.size(); ++i) {
     unsigned char currentByte = 0;
@@ -471,7 +476,9 @@ bool Stegano::extractImage(const cv::Mat &carrier_img, const std::string &key,
   mvprintw(3, 1, "Selected path:\n");
   refresh();
   getch();
-  std::memcpy(&dataSize, sizeBuffer.data(), sizeof(size_t));
+  dataSize = 0;
+  for (int i = 0; i < 8; ++i)
+    dataSize |= static_cast<size_t>(sizeBuffer[i]) << (8 * i);
   // std::cout << "Data size to extract: " << dataSize << " bytes" << std::endl;
 
   // Now extract the actual encrypted data
@@ -525,9 +532,9 @@ bool Stegano::extractImage(const cv::Mat &carrier_img,
                            const std::string &outputPath) {
   size_t bitIndex = 0;
 
-  // First extract data size
+  // First extract the payload size (fixed 8-byte little-endian header).
   size_t dataSize = 0;
-  std::vector<unsigned char> sizeBuffer(sizeof(size_t));
+  std::vector<unsigned char> sizeBuffer(8);
 
   for (size_t i = 0; i < sizeBuffer.size(); ++i) {
     unsigned char currentByte = 0;
@@ -551,7 +558,9 @@ bool Stegano::extractImage(const cv::Mat &carrier_img,
   mvprintw(3, 1, "Selected path:\n");
   refresh();
   getch();
-  std::memcpy(&dataSize, sizeBuffer.data(), sizeof(size_t));
+  dataSize = 0;
+  for (int i = 0; i < 8; ++i)
+    dataSize |= static_cast<size_t>(sizeBuffer[i]) << (8 * i);
   // std::cout << "Data size to extract: " << dataSize << " bytes" << std::endl;
 
   // Now extract the actual encrypted data
