@@ -91,17 +91,37 @@ Covers must be 24-bit BMP. A non-empty password enables encryption + randomizati
 ```
 
 An interactive ncurses menu: embed/extract a **text message** or an **image-in-image**,
-with a side-by-side cover/stego preview and a PSNR score. Requires OpenCV, ncurses, and a
-display (it opens OpenCV preview windows).
+with a side-by-side cover/stego preview and a PSNR score. Requires OpenCV and ncurses.
+
+Set **`STEGO_NO_PREVIEW=1`** (or run with no `DISPLAY`) to skip the OpenCV preview windows
+so it works headless/over SSH; PSNR is still reported:
+
+```shell
+STEGO_NO_PREVIEW=1 ./build/SteganoImgLsb
+```
+
+The text and image-in-image formats are tagged with distinct magic markers, so extracting
+one with the other mode is rejected rather than silently producing garbage.
 
 ### Video LSB (`SteganoVid`)
+
+Interactive menu (no arguments):
 
 ```shell
 ./build/SteganoVid
 ```
 
-Interactive prompts for cover/output paths and a seed; output is a lossless FFV1/AVI.
-Requires OpenCV.
+Or non-interactive / scriptable:
+
+```shell
+./build/SteganoVid embed --cover in.avi --message "secret" --output stego.avi \
+      [--seed N] [--frame-mode seq|rand] [--pixel-mode seq|rand] [--key <k>]
+./build/SteganoVid extract --stego stego.avi [--output out.txt] [--key <k>]
+./build/SteganoVid --help
+```
+
+Video hides a single-line text message; output is a lossless FFV1/AVI. `--seed` must be
+0..31 and must match between embed and extract. Requires OpenCV.
 
 ## Testing
 
@@ -112,9 +132,10 @@ cmake --build build          # build the tools first
 bash tests/roundtrip.sh      # audio + BPCS always; video when available
 ```
 
-It covers audio `{plain, -e, -r, -e -r}` (plus a wrong-password rejection case) and BPCS
-`{no-password, with-password}`. Video is exercised when a non-interactive `SteganoVid` is
-present; the interactive image TUI is out of scope for the harness.
+It covers audio `{plain, -e, -r, -e -r}` (plus a wrong-password rejection case), BPCS
+`{no-password, with-password}`, the image text-LSB path (round-trip + magic guard, via the
+`lsb_text_test` target), and video `{plain, encrypted, random frame+pixel}` when ffmpeg and
+a non-interactive `SteganoVid` are present. The interactive image TUI menu is out of scope.
 
 ## Packaging & install
 
@@ -138,3 +159,9 @@ for changed formats. Notable client-only changes:
 - Hardened audio extraction against crashes on wrong password / corrupt input.
 - Made the CMake build tolerate a missing OpenCV and build the standalone tools.
 - Labeled the Vigenère option as obfuscation, not encryption, throughout.
+- Replaced the native `size_t` image length header with a portable 8-byte little-endian
+  one (byte-identical on x86-64).
+- Tagged the text and image-in-image LSB payloads with distinct format magics.
+- Added a non-interactive/scriptable mode and `--help` to the video tool, and fixed
+  random frame-mode extraction.
+- Added a headless (no-preview) mode to the image LSB TUI.
